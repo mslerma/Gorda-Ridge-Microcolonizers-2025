@@ -5,7 +5,7 @@ library(ggplot2)
 library(dplyr)
 library(vegan)
 # load data
-load("input-data/GR_Microcolonizer_data.RData", verbose = TRUE)
+# load("~/Research lab/microcolonizers/Gorda-Ridge-Microcolonizers-2025/microcolonizer_inputdata_02082025 (1).RData")
 
 ## A. Comp and div of settled microbes (and sub)
 ## 1. Tile/bar/point plots ##
@@ -129,7 +129,7 @@ df_16s_all <- mc_tmp_16 %>%
 mc_df_16s <- df_16s_all %>%
   filter(SAMPLE != "Background seawater" & SAMPLE != "Mt Edwards diffuse fluid") %>%
   filter(!is.na(Phylum)) %>%
-  separate(SAMPLE, into = c("MC", "SUBSTRATE"), sep = "-") %>%
+  separate(SAMPLE, into = c("MC", "SUBSTRATE"), sep = "-", remove = FALSE) %>%
   add_column(PRESENCE = 1) 
 unique(mc_df_18s$Phylum)
 
@@ -292,7 +292,6 @@ ggplot(stacked_asvs, aes(x = ordered_SAMPLES_18S, y = Count, fill = TAXA_LEVEL))
   theme(axis.text.x = element_text(angle = -45, hjust = 0)) + 
   labs(x = "", y = "Relative ASV Abundance")
 
-filt_stacked_asvs$order_MC <- factor(filt_stacked_asvs$MC, levels = c("MC2", "MC3", "MC1", "MC4", "MC5", "MC6", "Mt Edwards diffuse fluid", "Background seawater"))
 filt_stacked_asvs <- stacked_asvs %>%
   filter(!(Phylum == "Metazoa" | Phylum == "Streptophyta" | Phylum == "Opisthokonta_X" | Phylum == "Stramenopiles_X")) %>%
   unite(TAXA_LEVEL, Supergroup, Phylum, sep = "-", remove = FALSE) %>%
@@ -302,6 +301,8 @@ filt_stacked_asvs <- stacked_asvs %>%
     SUBSTRATE == "Mt Edwards diffuse fluid" ~ "Vent",
     .default = SUBSTRATE
   ))
+filt_stacked_asvs$order_MC <- factor(filt_stacked_asvs$MC, levels = c("MC2", "MC3", "MC1", "MC4", "MC5", "MC6", "Mt Edwards diffuse fluid", "Background seawater"))
+
 ggplot(filt_stacked_asvs, aes(x = ordered_SAMPLES_18S, y = Count, fill = TAXA_LEVEL)) +
   geom_bar(stat = "identity", position = "fill", color = "black") +
   theme_classic() +
@@ -343,33 +344,29 @@ df_taxonomy_16S <- mc_16S_df %>%
 rel_seq_16S_2 <- rel_seq_16S %>%
   left_join(df_taxonomy_16S, by = "Phylum", relationship = "many-to-many") %>%
   unite(TAXA_LEVEL, Phylum, Class, sep = "-", remove = FALSE)
+
+rel_seq_16S$ordered_MC <- factor(rel_seq_16S$MC, levels = c("MC2", "MC3", "MC1", "MC4", "MC5", "MC6"))
+
 ggplot(rel_seq_16S, aes(x = SAMPLE, y = SUM_SEQ, fill = Phylum)) +
   geom_bar(stat = "identity", position = "fill", color = "black") +
   facet_grid(cols = vars(ordered_MC), scales = "free", space = "free") +
   theme_minimal() + 
   theme(axis.text.x = element_text(angle = -45, hjust = 0)) + 
   labs(x = "", y = "16S Relative Seqeunce Abundance")
-rel_seq_16S$ordered_MC <- factor(rel_seq_16S$MC, levels = c("MC2", "MC3", "MC1", "MC4", "MC5", "MC6"))
 
 #18S
+unique(rel_seq_18S_2$Phylum)
 rel_seq_18S_2 <- mc_18S_df %>%
+  filter(Phylum != "Metazoa" & Phylum != "Streptophyta" & Phylum != "Opisthokonta_X" & Phylum != "Stramenopiles_X") %>%
+  filter(SAMPLE != "Mt Edwards diffuse fluid" & SAMPLE != "Background seawater") %>%
   group_by(SAMPLE, Phylum) %>%
-  summarise(SUM_SEQ = sum(SEQ_AVG)) 
-main_rel_seq_18S_2 <- rel_seq_18S_2 %>%
-  filter(SUM_SEQ > 300) %>%
-  separate(SAMPLE, into = c("MC", "SUBSTRATE"), sep = "-", remove = FALSE, fill = "left")
+  summarise(SUM_SEQ = SEQ_AVG/sum(SEQ_AVG)) 
 
 rel_seq_18S_2$ordered_SAMPLES_18S <- factor(rel_seq_18S_2$SAMPLE, levels = c("MC2-Quartz", "MC2-Riftia", "MC3-Riftia", "MC3-Shell", "MC1-Quartz", "MC1-Riftia", "MC1-Shell", "MC4-Quartz", "MC4-Shell", "MC5-Quartz", "MC5-Riftia", "MC5-Shell", "MC6-Quartz", "MC6-Riftia", "MC6-Shell", "Mt Edwards diffuse fluid", "Background seawater"))
-
+main_rel_seq_18S_2$ordered_SAMPLES_18S <- factor(main_rel_seq_18S_2$SAMPLE, levels = c("MC2-Quartz", "MC2-Riftia", "MC3-Riftia", "MC3-Shell", "MC1-Quartz", "MC1-Riftia", "MC1-Shell", "MC4-Quartz", "MC4-Shell", "MC5-Quartz", "MC5-Riftia", "MC5-Shell", "MC6-Quartz", "MC6-Riftia", "MC6-Shell", "Mt Edwards diffuse fluid", "Background seawater"))
 ggplot(rel_seq_18S_2, aes(x = ordered_SAMPLES_18S, y = SUM_SEQ, fill = Phylum)) +
   geom_bar(stat = "identity", position = "fill", color = "black") +
   theme_classic() + 
-  theme(axis.text.x = element_text(angle = -45, hjust = 0))
-
-ggplot(main_rel_seq_18S_2, aes(x = ordered_SAMPLES_18S, y = SUM_SEQ, fill = Phylum)) +
-  geom_bar(stat = "identity", position = "fill", color = "black") +
-  facet_grid(cols = vars(SUBSTRATE), scales = "free", space = "free") +
-  theme_minimal() + 
   theme(axis.text.x = element_text(angle = -45, hjust = 0))
 
 df_taxonomy <- mc_18S_df %>%
@@ -391,9 +388,30 @@ filt_rel_seq_18S <- rel_seq_18S_2 %>%
 ggplot(filt_rel_seq_18S, aes(x = ordered_SAMPLES_18S, y = SUM_SEQ, fill = TAXA_LEVEL)) +
   geom_bar(stat = "identity", position = "fill", color = "black") +
   facet_grid(cols = vars(SITE), scales = "free", space = "free") +
+  scale_fill_manual(values = c("#f1eef6", "#d7b5d8", "#df65b0", "#dd1c77", 
+                               "#fde0dd", "#fa9fb5", "#c51b8a", "#edf8fb", "#bfd3e6", "#9ebcda", 
+                               "#8c96c6", "#8856a7", "#810f7c","#ffffcc", "#f0f9e8", "#c7e9b4", "#7fcdbb", 
+                               "#41b6c4", "#2c7fb8", "#253494", "#fee391",  "#fec44f",  "#fe9929", 
+                               "#d95f0e", "#993404", "#fc9272", "#fb6a4a", "#de2d26", "#a50f15")) +
   theme_minimal() + 
   theme(axis.text.x = element_text(angle = -45, hjust = 0)) + 
   labs(x = "", y = "Relative Seqeunce Abundance")
+
+unique(filt_rel_seq_18S$TAXA_LEVEL)
+
+#
+ggplot(filt_rel_seq_18S, aes(x = ordered_SAMPLES_18S, y = SUM_SEQ, fill = TAXA_LEVEL)) +
+  geom_bar(stat = "identity", position = "fill", color = "black") +
+  facet_grid(cols = vars(MC), scales = "free", space = "free") +
+  scale_fill_manual(values = c("#f1eef6", "#d7b5d8", "#df65b0", "#dd1c77", 
+                               "#fde0dd", "#fa9fb5", "#c51b8a", "#edf8fb", "#bfd3e6", "#9ebcda", 
+                               "#8c96c6", "#8856a7", "#810f7c","#ffffcc", "#f0f9e8", "#c7e9b4", "#7fcdbb", 
+                               "#41b6c4", "#2c7fb8", "#253494", "#fee391",  "#fec44f",  "#fe9929", 
+                               "#d95f0e", "#993404", "#fc9272", "#fb6a4a", "#de2d26", "#a50f15")) +
+  theme_minimal() + 
+  theme(axis.text.x = element_text(angle = -45, hjust = 0)) + 
+  labs(x = "", y = "Relative Seqeunce Abundance")
+#
 ggplot(filt_rel_seq_18S, aes(x = ordered_SAMPLES_18S, y = SUM_SEQ, fill = TAXA_LEVEL)) +
   geom_bar(stat = "identity", position = "fill", color = "black") +
   facet_grid(cols = vars(MC), scales = "free", space = "free") +
@@ -407,9 +425,22 @@ ASV_onsubs <- stacked_asvs %>%
   filter(!(Phylum == "Opisthokonta_X" | Phylum == "Stramenopiles_X"))
 ggplot(ASV_onsubs, aes(x = SUBSTRATE, y = Phylum)) +
   geom_point(aes(size = Count), color = "blue", alpha= 0.7) +
-  facet_grid(rows = vars(Supergroup), scales = "free", space = "free") + 
+  theme_classic() +
+  facet_grid(rows = vars(Supergroup), cols = vars(MC), scales = "free", space = "free") +
+  theme(strip.text.y = element_text(angle = 0)) +
   scale_size_continuous(name = "ASV Count", range = c(2, 10)) +
-  theme_classic()
+  scale_fill_manual(values = c("#dd1c77", "#9ebcda",  "#c7e9b4"))
+
+ggplot(ASV_onsubs, aes(x = SUBSTRATE, y = Phylum)) +
+  geom_point(aes(size = Count, color = SUBSTRATE), alpha = 0.7) +
+  scale_color_manual(values = c("Quartz" = "#dd1c77",
+                                "Riftia" = "#9ebcda",
+                                "Shell"  = "#c7e9b4")) +
+  scale_size_continuous(name = "ASV Count", range = c(2, 10)) +
+  facet_grid(rows = vars(Supergroup), cols = vars(MC), scales = "free", space = "free") +
+  theme_classic() +
+  theme(strip.text.y = element_text(angle = 0))
+
 # w out Meta/Strep
 ASV_onsubs <- stacked_asvs %>%
   separate(SAMPLE, into = c("MC", "SUBSTRATE"), sep = "-", remove = FALSE) %>%
@@ -422,11 +453,12 @@ ggplot(ASV_onsubs, aes(x = SUBSTRATE, y = Phylum)) +
   theme_classic()
 #### Relative SEQ abundance of each phylum across MCs - tile plot (grouped by substrate and supergroup, no Metazoa or Streptophyta) ####
 seq_rel_ab_18S<- mc_df_18s %>%
-  mutate(Relative_Abundance = SEQ_AVG / sum(SEQ_AVG))  
+  group_by(SAMPLE, Phylum) %>%
+  mutate(Seq_Rel_Abund = SEQ_AVG/sum(SEQ_AVG, na.rm = TRUE)) 
 
 seq_rel_ab_18S$MC_ordered_18S <- factor(seq_rel_ab_18S$MC, levels = c("MC2", "MC3", "MC1", "MC4", "MC5", "MC6"))
 
-ggplot(seq_rel_ab_18S, aes(x = MC_ordered_18S, y = Phylum, fill = Relative_Abundance)) +
+ggplot(seq_rel_ab_18S, aes(x = MC_ordered_18S, y = Phylum, fill = Seq_Rel_Abund)) +
   geom_tile(stat = "identity") +
   theme_classic() +
   facet_grid(cols = vars(SUBSTRATE), rows = vars(Supergroup), scales = "free", space = "free") +
@@ -459,11 +491,20 @@ ggplot(sep_plot_shannon_18S, aes(x = ordered_SAMPLES_18S, y = shannon_18S), fill
 
 onlyMCs_shann <- sep_plot_shannon_18S %>%
   filter(!(SAMPLE == "Background seawater"| SAMPLE == "Mt Edwards diffuse fluid"))
+
+ggplot(onlyMCs_shann, aes(x = ordered_SAMPLES_18S, y = shannon_18S, fill = MC, shape = SUBSTRATE)) +
+  geom_point(size = 2, stroke = 0.8) +
+  scale_fill_manual(values = c("MC1" = "#8ac926", "MC2" = "#ff595e", "MC3" = "#ff924c", "MC4" = "#8ac926", "MC5" = "#1982c4", "MC6" = "#6a4c93")) +
+  scale_shape_manual(values = c("Quartz" = 21, "Shell" = 24, "Riftia" = 23)) +
+  theme(axis.text.x = element_text(angle = -45, hjust = 0)) +
+  labs(x = "", y = "Shannon Diversity", 
+       fill = "Microcolonizer", shape = "Substrate") +
+  guides(fill = guide_legend(override.aes = list(shape = 21)))
+
 ggplot(onlyMCs_shann, aes(x = ordered_SAMPLES_18S, y = shannon_18S), fill = MC, shape = SUBSTRATE) +
   geom_point(fill = c( "#8ac926","#8ac926", "#8ac926", "#ff595e", "#ff595e", "#ff924c", "#ff924c", "#8ac926", "#8ac926", "#1982c4", "#1982c4", "#1982c4", "#6a4c93", "#6a4c93",  "#6a4c93"), shape = c(21, 24, 23, 21, 24, 24, 23, 21, 23, 21, 24, 23, 21, 24, 23)) +
   theme(axis.text.x = element_text(angle = -45, hjust = 0)) +
   labs(x= "", y = "Shannon diversity")
-
 # 18S-Inv Simp
 stand_wide_18S_mat <- decostand(wide_18S_mat, method = "hellinger", MARGIN = 2)
 
@@ -480,27 +521,29 @@ filt_sep_plot_simpson_18S <- sep_plot_simpson_18S %>%
 sep_plot_simpson_18S$ordered_SAMPLES_18S <- factor(sep_plot_simpson_18S$SAMPLE, levels = c("MC2-Quartz", "MC2-Riftia", "MC3-Riftia", "MC3-Shell", "MC1-Quartz", "MC1-Riftia", "MC1-Shell", "MC4-Quartz", "MC4-Shell", "MC5-Quartz", "MC5-Riftia", "MC5-Shell", "MC6-Quartz", "MC6-Riftia", "MC6-Shell", "Mt Edwards diffuse fluid", "Background seawater"))
 filt_sep_plot_simpson_18S$ordered_SAMPLES_18S <- factor(filt_sep_plot_simpson_18S$SAMPLE, levels = c("MC2-Quartz", "MC2-Riftia", "MC3-Riftia", "MC3-Shell", "MC1-Quartz", "MC1-Riftia", "MC1-Shell", "MC4-Quartz", "MC4-Shell", "MC5-Quartz", "MC5-Riftia", "MC5-Shell", "MC6-Quartz", "MC6-Riftia", "MC6-Shell"))
 
-ggplot(sep_plot_simpson_18S, aes(x = ordered_SAMPLES_18S, y = inv_simp_18S), fill = MC, shape = SUBSTRATE) +
-  geom_point(fill = c( "#2a2b47", "#8ac926","#8ac926", "#8ac926", "#ff595e", "#ff595e", "#ff924c", "#ff924c", "#8ac926", "#8ac926", "#1982c4", "#1982c4", "#1982c4", "#6a4c93", "#6a4c93",  "#6a4c93", "#2a2b47"), shape = c(4, 21, 24, 23, 21, 24, 24, 23, 21, 23, 21, 24, 23, 21, 24, 23, 4)) +
-  theme(axis.text.x = element_text(angle = -45, hjust = 0)) +
-  labs(x= "", y = "Inverse Simpson diversity")
-
 ggplot(filt_sep_plot_simpson_18S, aes(x = ordered_SAMPLES_18S, y = inv_simp_18S), fill = MC, shape = SUBSTRATE) +
   geom_point(fill = c( "#8ac926","#8ac926", "#8ac926", "#ff595e", "#ff595e", "#ff924c", "#ff924c", "#8ac926", "#8ac926", "#1982c4", "#1982c4", "#1982c4", "#6a4c93", "#6a4c93",  "#6a4c93"), shape = c(21, 24, 23, 21, 24, 24, 23, 21, 23, 21, 24, 23, 21, 24, 23)) +
   theme(axis.text.x = element_text(angle = -45, hjust = 0)) +
-  labs(x= "", y = "Shannon diversity")
-#
-ggplot(plot_shannon_microcol_18S, aes(x= SAMPLE, y= shannon_microcol_18s)) +
-  geom_point(color = "purple", size = 4, shape = 17) +
-  labs(x = "", y= "Shannon diversity") +
-  theme(axis.text.x = element_text(angle = -45, hjust = 0))
+  labs(x= "", y = "Inverse Simpson diversity")
 
-ggplot(plot_inv_simp_microcol_18S, aes(x= MC, y= inv_simp_microcol_18S)) +
-  geom_point(color = "#2d00f7", size = 4, shape = 17) +
-  labs(x= "", y= "Inverse Simpson diversity") +
-  theme(axis.text.x = element_text(angle = -45, hjust = 0))
+
+ggplot(filt_sep_plot_simpson_18S, aes(x = ordered_SAMPLES_18S, y = inv_simp_18S, fill = MC, shape = SUBSTRATE)) +
+  geom_point(size = 2, stroke = 0.8) +
+  scale_fill_manual(values = c("MC1" = "#8ac926", "MC2" = "#ff595e", "MC3" = "#ff924c", "MC4" = "#8ac926", "MC5" = "#1982c4", "MC6" = "#6a4c93")) +
+  scale_shape_manual(values = c("Quartz" = 21, "Shell" = 24, "Riftia" = 23)) +
+  theme(axis.text.x = element_text(angle = -45, hjust = 0)) +
+  labs(x = "", y = "Inverse Simpson Diversity", 
+       fill = "Microcolonizer", shape = "Substrate") +
+  guides(fill = guide_legend(override.aes = list(shape = 21)))
+
+
 #
 ### 16S
+microcol_only_16S <- mc_16S_df %>%
+  separate(SAMPLE, into = c("MC", "SUBSTRATE"), sep = "-", remove = FALSE) %>%
+  filter(!is.na(SUBSTRATE)) %>%
+  group_by(SAMPLE, FeatureID) %>%
+  summarise(SUM = sum(SEQ_AVG))
 wide_microcol_only_16S <- microcol_only_16S %>% ungroup() %>%
   select(SAMPLE, FeatureID, SUM) %>%
   pivot_wider(names_from = SAMPLE, values_from = SUM, values_fill = 0) %>%
@@ -516,7 +559,6 @@ plot_shannon_microcol_16S <- as.data.frame(shannon_microcol_16s) %>%
 # 16S-Inv Simp
 stand_wide_microcol_16S_mat<- decostand(wide_microcol_only_16S_mat, method = "hellinger", MARGIN = 2)
 inv_simp_microcol_16S <- diversity(stand_wide_microcol_16S_mat, index = "invsimpson", MARGIN = 2, equalize.groups = TRUE)
-plot_inv_simp_microcol_16S
 plot_inv_simp_microcol_16S <- as.data.frame(inv_simp_microcol_16S) %>%
   rownames_to_column(var = "SAMPLE") %>%
   separate(col = SAMPLE, into = c("MC", "SUBSTRATE"), sep = "-", remove = FALSE) %>%
@@ -545,17 +587,37 @@ samp_sites_asvs_18S <- mc_18S_df %>%
     SAMPLE == "Background seawater" ~ "Background",
     SAMPLE == "Mt Edwards diffuse fluid" ~ "Vent",
     grepl("MC", SAMPLE) ~ "MC",
-    TRUE ~ "Other"))
+    TRUE ~ "Other")) %>%
+  separate(col = SAMPLE, into = c("MC", "SUBSTRATE"), sep = "-", remove = FALSE, fill = "left")
 unique(samp_sites_asvs_18S$SAMPLE_SITE)  
 plot_samp_asvs_18s <- samp_sites_asvs_18S %>%
-  group_by(SAMPLE_SITE) %>%
-  summarise(Total_ASVs = n_distinct(FeatureID))
+  group_by(SAMPLE) %>%
+  summarise(Total_ASVs = n_distinct(FeatureID)) %>%
+  separate(col = SAMPLE, into = c("MC", "SUBSTRATE"), sep = "-", remove = FALSE, fill = "right") %>%
+  mutate(SAMPLE_SITE = case_when(
+    SAMPLE == "Background seawater" ~ "Background",
+    SAMPLE == "Mt Edwards diffuse fluid" ~ "Vent",
+    grepl("MC1", SAMPLE) ~ "MC1",
+    grepl("MC2", SAMPLE) ~ "MC2",
+    grepl("MC3", SAMPLE) ~ "MC3",
+    grepl("MC4", SAMPLE) ~ "MC4",
+    grepl("MC5", SAMPLE) ~ "MC5",
+    grepl("MC6", SAMPLE) ~ "MC6",
+    TRUE ~ "Other")) %>%
+  mutate(SUBSTRATE = case_when(
+    is.na(SUBSTRATE) ~ "Background & Vent", 
+    .default = SUBSTRATE
+  ))
 
-ggplot(plot_samp_asvs_18s, aes(x= SAMPLE_SITE, y= Total_ASVs)) +
-  geom_point(color = "#3eabf4", size = 4, shape = 18) +
-  labs(x= "Sample Site", y= "Total ASVs")
+asv_samp_18S <- ggplot(plot_samp_asvs_18s, aes(x= SAMPLE_SITE, y= Total_ASVs, shape = SUBSTRATE)) +
+  geom_point(color = "#3eabf4", size = 4) +
+  scale_shape_manual(values = c(21, 22, 23, 24, 25)) +
+  labs(x= "", y= "Total ASVs") +
+  theme(axis.text.x = element_text(angle = -45, hjust = 0)) +
+  guides(shape = guide_legend(override.aes = list(color = "black")))
 
-# 18S-MCs
+
+# 18S-QRS
 microcol_only <- mc_18S_df %>%
   separate(SAMPLE, into = c("SAMPLE_ID", "SUBSTRATE"), sep = "-", remove = FALSE) %>%
   filter(!is.na(SUBSTRATE)) %>%
@@ -566,22 +628,28 @@ sep_microcol_only <- microcol_only %>%
 plot_sub_asvs_18S <- sep_microcol_only %>%
   group_by(SUBSTRATE) %>%
   summarise(Total_ASVs = n_distinct(FeatureID))
-ggplot(plot_sub_asvs_18S, aes(x= SUBSTRATE, y= Total_ASVs)) +
+asv_sub_18S <- ggplot(plot_sub_asvs_18S, aes(x= SUBSTRATE, y= Total_ASVs)) +
   geom_point(color = "#3eabf4", size = 4, shape = 15) +
-  labs(x= "", y= "Total ASVs")
+  labs(x= "", y= "")
 
-# 18S-Q/R/S
-plot_sub_asvs_18S <- sep_microcol_only %>%
-  group_by(SUBSTRATE) %>%
+# 18S-MCs
+noBV_plot_asvs_18S <- plot_samp_asvs_18s %>%
+  filter(SAMPLE_SITE != "Background" & SAMPLE_SITE != "Vent")
+plot_MC_asvs_18S <- sep_microcol_only %>%
+  group_by(MC) %>%
   summarise(Total_ASVs = n_distinct(FeatureID))
-ggplot(plot_sub_asvs_18S, aes(x= SUBSTRATE, y= Total_ASVs)) +
-  geom_point(color = "#3eabf4", size = 4, shape = 15) +
-  labs(x= "", y= "Total ASVs")
+asv_MC_18S <- ggplot(noBV_plot_asvs_18S, aes(x= MC, y= Total_ASVs, shape = SUBSTRATE)) +
+  geom_point(color = "#3eabf4", size = 4) +
+  scale_shape_manual(values = c(22, 23, 24)) +
+  labs(x= "", y= "Total ASVs") +
+  theme(axis.text.x = element_text(angle = -45, hjust = 0)) +
+  guides(shape = guide_legend(override.aes = list(color = "black")))
+
 
 ## 16S-B/MC/V
 MC_only_16S <- mc_16S_df %>%
   filter(SAMPLE != "Background seawater" & SAMPLE != "Mt Edwards diffuse fluid") %>%
-  separate(SAMPLE, into = c("MC", "SUBSTRATE"), sep = "-") %>%
+  separate(SAMPLE, into = c("MC", "SUBSTRATE"), sep = "-", remove = FALSE) %>%
   filter(SUBSTRATE == "Quartz" | SUBSTRATE == "Riftia" | SUBSTRATE == "Shell")
 MC_only_16S$MC_ordered_16S <- factor(MC_only_16S$MC, levels = c("MC2", "MC3", "MC1", "MC4", "MC5", "MC6"))
 
@@ -617,18 +685,28 @@ ggplot(plot_sub_asvs_18S, aes(x= SUBSTRATE, y= Total_ASVs)) +
 ### Shannon div (B/MC/V, MCs1-6, Q/R/S) ###
 # 18S-B/MC/V
 sample_sites_18S <- mc_18S_df %>% 
+  separate(col = SAMPLE, into = c("MC", "SUBSTRATE"), sep = "-", remove = FALSE, fill = "right") %>%
   mutate(SAMPLE_SITE = case_when(
     SAMPLE == "Background seawater" ~ "Background",
     SAMPLE == "Mt Edwards diffuse fluid" ~ "Vent",
-    grepl("MC", SAMPLE) ~ "MC",
-    TRUE ~ "Other"))
+    grepl("MC1", SAMPLE) ~ "MC1",
+    grepl("MC2", SAMPLE) ~ "MC2",
+    grepl("MC3", SAMPLE) ~ "MC3",
+    grepl("MC4", SAMPLE) ~ "MC4",
+    grepl("MC5", SAMPLE) ~ "MC5",
+    grepl("MC6", SAMPLE) ~ "MC6",
+    TRUE ~ "Other")) %>%
+  mutate(SUBSTRATE = case_when(
+    is.na(SUBSTRATE) ~ "Background & Vent", 
+    .default = SUBSTRATE
+  ))
 summ_samp_sit_18S <- sample_sites_18S %>%
-  group_by(SAMPLE_SITE, FeatureID) %>%
+  group_by(SAMPLE, FeatureID) %>%
   summarize(SUM = sum(SEQ_AVG))
 
 wide_samp_sites_18s <- summ_samp_sit_18S %>% ungroup() %>%
-  select(SAMPLE_SITE, FeatureID, SUM) %>%
-  pivot_wider(names_from = SAMPLE_SITE, values_from = SUM, values_fill = 0) %>%
+  select(SAMPLE, FeatureID, SUM) %>%
+  pivot_wider(names_from = SAMPLE, values_from = SUM, values_fill = 0) %>%
   column_to_rownames(var = "FeatureID")
 
 wide_samp_sites_18s_mat <- as.matrix(wide_samp_sites_18s)
@@ -636,12 +714,41 @@ stand_wide_samp_site_18S_mat <- decostand(wide_samp_sites_18s_mat, method = "hel
 shannon_samp_18S <- diversity(wide_samp_sites_18s_mat, index = "shannon", MARGIN = 2)
 shannon_samp_18S
 plot_shannon_samp_18S <- as.data.frame(shannon_samp_18S) %>%
-  rownames_to_column(var = "SAMPLE_SITE")
+  rownames_to_column(var = "SAMPLE") %>%
+  separate(col = SAMPLE, into = c("MC", "SUBSTRATE"), sep = "-", remove = FALSE, fill = "right") %>%
+  mutate(SAMPLE_SITE = case_when(
+    SAMPLE == "Background seawater" ~ "Background",
+    SAMPLE == "Mt Edwards diffuse fluid" ~ "Vent",
+    grepl("MC1", SAMPLE) ~ "MC1",
+    grepl("MC2", SAMPLE) ~ "MC2",
+    grepl("MC3", SAMPLE) ~ "MC3",
+    grepl("MC4", SAMPLE) ~ "MC4",
+    grepl("MC5", SAMPLE) ~ "MC5",
+    grepl("MC6", SAMPLE) ~ "MC6",
+    TRUE ~ "Other")) %>%
+  mutate(SUBSTRATE = case_when(
+    is.na(SUBSTRATE) ~ "Background & Vent", 
+    .default = SUBSTRATE
+  ))
 plot_shannon_samp_18S  
 
-ggplot(plot_shannon_samp_18S, aes(x= SAMPLE_SITE, y= shannon_samp_18S)) +
-  geom_point(color = "purple", size = 4, shape = 18) +
-  labs(x = "Sample Site", y= "Shannon diversity")
+shannon_sites_18S <- ggplot(plot_shannon_samp_18S, aes(x= SAMPLE_SITE, y= shannon_samp_18S, shape = SUBSTRATE)) +
+  geom_point(color = "purple", size = 4) +
+  scale_shape_manual(values = c(21, 22, 23, 24, 25)) +
+  labs(x = "", y= "Shannon diversity") +
+  theme(axis.text.x = element_text(angle = -45, hjust = 0)) +
+  theme(legend.position = "none")
+## no Background or Vent
+plot_shannon_samp_noBV_18S <- plot_shannon_samp_18S %>%
+  filter(SAMPLE != "Background seawater" & SAMPLE != "Mt Edwards diffuse fluid")
+
+shannon_samp_noBV_18S <- ggplot(plot_shannon_samp_noBV_18S, aes(x= MC, y= shannon_samp_18S, shape = SUBSTRATE)) +
+  geom_point(color = "purple", size = 4) +
+  scale_shape_manual(values = c(22, 23, 24)) +
+  labs(x = "", y= "Shannon diversity") +
+  theme(axis.text.x = element_text(angle = -45, hjust = 0)) +
+  theme(legend.position = "none")
+##
 # 18S-MCs
 MC_shann <- sep_microcol_only %>%
   group_by(MC, FeatureID) %>%
@@ -655,9 +762,9 @@ shannon_MCs_18s <- diversity(wide_MCs_mat, index = "shannon", MARGIN = 2)
 shannon_MCs_18s
 plot_shannon_MCs_18S <- as.data.frame(shannon_MCs_18s) %>%
   rownames_to_column(var = "MC") 
-ggplot(plot_shannon_MCs_18S, aes(x= MC, y= shannon_MCs_18s)) +
+shannon_MC_18S <- ggplot(plot_shannon_MCs_18S, aes(x= MC, y= shannon_MCs_18s)) +
   geom_point(color = "purple", size = 4, shape = 17) +
-  labs(x = "", y= "Shannon diversity")
+  labs(x = "", y= "")
 
 # 18s-Q/R/S
 grp_subs_18s <- sep_microcol_only %>%
@@ -673,9 +780,9 @@ shannon_subs_18s <- diversity(wide_subs_18s_mat, index = "shannon", MARGIN = 2)
 shannon_subs_18s
 plot_shannon_subs_18s <- as.data.frame(shannon_subs_18s) %>%
   rownames_to_column(var = "SUBSTRATE")
-ggplot(plot_shannon_subs_18s, aes(x= SUBSTRATE, y= shannon_subs_18s)) +
+shannon_sub_18S <- ggplot(plot_shannon_subs_18s, aes(x= SUBSTRATE, y= shannon_subs_18s)) +
   geom_point(color = "purple", size = 4, shape = 15) +
-  labs(x = "", y= "Shannon diversity")
+  labs(x = "", y= "")
 
 # 16S-B/MC/V
 sample_sites_16S <- mc_16S_df %>% 
@@ -737,7 +844,9 @@ wide_subs_16S <- grp_subs_16S %>% ungroup() %>%
   pivot_wider(names_from = SUBSTRATE, values_from = SUM, values_fill = 0) %>%
   column_to_rownames(var = "FeatureID")
 wide_subs_16S_mat <- as.matrix(wide_subs_16S)  
-
+shannon_subs_16S <- diversity(wide_subs_16S_mat, index = "shannon", MARGIN = 2)
+plot_shannon_subs_16S <- as.data.frame(shannon_subs_16S) %>%
+  rownames_to_column(var = "SUBSTRATE")
 ggplot(plot_shannon_subs_16S, aes(x= SUBSTRATE, y= shannon_subs_16S)) +
   geom_point(color = "purple", size = 4, shape = 15) +
   labs(x = "", y= "16S Shannon diversity")
@@ -745,34 +854,68 @@ ggplot(plot_shannon_subs_16S, aes(x= SUBSTRATE, y= shannon_subs_16S)) +
 ### Inv Simp div (B/MC/V, MCs, Q/R/S)
 # 18S-B/MC/V
 inv_simp_samp_18S <- diversity(stand_wide_samp_site_18S_mat, index = "invsimpson", MARGIN = 2, equalize.groups = TRUE)
-plot_inv_simp_samp_18S
 plot_inv_simp_samp_18S <- as.data.frame(inv_simp_samp_18S) %>%
-  rownames_to_column(var = "SAMPLE_SITE")
+  rownames_to_column(var = "SAMPLE") %>%
+  separate(col = SAMPLE, into = c("MC", "SUBSTRATE"), sep = "-", remove = FALSE, fill = "right") %>%
+  mutate(SAMPLE_SITE = case_when(
+    SAMPLE == "Background seawater" ~ "Background",
+    SAMPLE == "Mt Edwards diffuse fluid" ~ "Vent",
+    grepl("MC1", SAMPLE) ~ "MC1",
+    grepl("MC2", SAMPLE) ~ "MC2",
+    grepl("MC3", SAMPLE) ~ "MC3",
+    grepl("MC4", SAMPLE) ~ "MC4",
+    grepl("MC5", SAMPLE) ~ "MC5",
+    grepl("MC6", SAMPLE) ~ "MC6",
+    TRUE ~ "Other")) %>%
+  mutate(SUBSTRATE = case_when(
+    is.na(SUBSTRATE) ~ "Background & Vent", 
+    .default = SUBSTRATE
+  ))
 
-ggplot(plot_inv_simp_samp_18S, aes(x= SAMPLE_SITE, y= inv_simp_samp_18S)) +
-  geom_point(color = "#2d00f7", size = 4, shape = 18) +
-  labs(x= "Sample Site", y= "Inverse Simpson diversity")
+invsimp_sites_18S <- ggplot(plot_inv_simp_samp_18S, aes(x= SAMPLE_SITE, y= inv_simp_samp_18S, shape = SUBSTRATE)) +
+  geom_point(color = "#2d00f7", size = 4) +
+  scale_shape_manual(values = c(21, 22, 23, 24, 25)) +
+  labs(x= "", y= "Inverse Simpson diversity") +
+  theme(axis.text.x = element_text(angle = -45, hjust = 0)) +
+  guides(shape = guide_legend(override.aes = list(color = "black")))
 
+## no background or vent
+plot_inv_simp_noBV_samp_18S <- plot_inv_simp_samp_18S %>%
+  filter(SAMPLE != "Background seawater" & SAMPLE != "Mt Edwards diffuse fluid")
+
+invsimp_noBV_samp_18S <- ggplot(plot_inv_simp_noBV_samp_18S, aes(x= MC, y= inv_simp_samp_18S, shape = SUBSTRATE)) +
+  geom_point(color = "#2d00f7", size = 4) +
+  scale_shape_manual(values = c(22, 23, 24)) +
+  labs(x= "", y= "Inverse Simpson diversity") +
+  theme(axis.text.x = element_text(angle = -45, hjust = 0)) +
+  guides(shape = guide_legend(override.aes = list(color = "black")))
 # 18S-MCs
 stand_wide_MCs_18S_mat<- decostand(wide_MCs_mat, method = "hellinger", MARGIN = 2)
 inv_simp_MCs_18S <- diversity(stand_wide_MCs_18S_mat, index = "invsimpson", MARGIN = 2, equalize.groups = TRUE)
-plot_inv_simp_MCs_18S
 plot_inv_simp_MCs_18S <- as.data.frame(inv_simp_MCs_18S) %>%
   rownames_to_column(var = "MC")
-ggplot(plot_inv_simp_MCs_18S, aes(x= MC, y= inv_simp_MCs_18S)) +
+invsimp_MC_18S <- ggplot(plot_inv_simp_MCs_18S, aes(x= MC, y= inv_simp_MCs_18S)) +
   geom_point(color = "#2d00f7", size = 4, shape = 17) +
-  labs(x= "", y= "Inverse Simpson diversity")
+  labs(x= "Microcolonizer", y= "")
 
 # 18S-Q/R/S
 stand_wide_subs_18s_mat<- decostand(wide_subs_18s_mat, method = "hellinger", MARGIN = 2)
 inv_simp_subs_18s <- diversity(stand_wide_subs_18s_mat, index = "invsimpson", MARGIN = 2, equalize.groups = TRUE)
-inv_simp_subs_18s
+
 plot_inv_simp_subs_18s <- as.data.frame(inv_simp_subs_18s) %>%
   rownames_to_column(var = "SUBSTRATE")
-ggplot(plot_inv_simp_subs_18s, aes(x= SUBSTRATE, y= inv_simp_subs_18s)) +
+invsimp_sub_18S <- ggplot(plot_inv_simp_subs_18s, aes(x= SUBSTRATE, y= inv_simp_subs_18s)) +
   geom_point(color = "#2d00f7", size = 4, shape = 15) +
-  labs(x= "", y= "Inverse Simpson diversity")
+  labs(x= "Substrate", y= "")
 
+##
+library(ggplot2)
+library(patchwork)
+library(ggpubr)
+
+ggarrange(asv_samp_18S, shannon_sites_18S, invsimp_sites_18S , labels = c("a.", "b.", "c."), common.legend = TRUE, legend = "right", ncol = 3, nrow = 1)
+ggarrange(asv_MC_18S, shannon_samp_noBV_18S, invsimp_noBV_samp_18S, labels = c("a.", "b.", "c."), common.legend = TRUE, legend = "right", ncol = 3, nrow = 1)
+##
 # 16S-B/MC/V
 inv_simp_samp_16S <- diversity(stand_wide_samp_site_16S_mat, index = "invsimpson", MARGIN = 2, equalize.groups = TRUE)
 inv_simp_samp_16S
@@ -799,8 +942,43 @@ inv_simp_subs_16S
 plot_inv_simp_subs_16S <- as.data.frame(inv_simp_subs_16S) %>%
   rownames_to_column(var = "SUBSTRATE")
 
+library(patchwork)
+plot_list <- list(asv_samp_18S, asv_MC_18S, asv_sub_18S, shannon_sites_18S, shannon_MC_18S, shannon_sub_18S, invsimp_sites_18S, invsimp_MC_18S, invsimp_sub_18S)
+wrap_plots(plot_list, ncol = 3)
+
+#
+grp_sep_microcol_only <- sep_microcol_only %>%
+  group_by(SAMPLE, FeatureID) %>%
+  summarize(SUM = sum(SUM))
+
+wide_microcol_only <- grp_sep_microcol_only %>% ungroup() %>%
+  select(SAMPLE, FeatureID, SUM) %>%
+  pivot_wider(names_from = SAMPLE, values_from = SUM, values_fill = 0) %>%
+  column_to_rownames(var = "FeatureID")
+wide_microcol_only_mat <- as.matrix(wide_microcol_only)  
+shannon_microcol_18s <- diversity(wide_microcol_only_mat, index = "shannon", MARGIN = 2)
+
+plot_shannon_microcol_18S <- as.data.frame(shannon_microcol_18s) %>%
+  rownames_to_column(var = "SAMPLE") %>%
+  separate(col = SAMPLE, into = c("MC", "SUBSTRATE"), sep = "-", remove = FALSE)
 
 
+stand_wide_microcol_18S_mat<- decostand(wide_microcol_only_mat, method = "hellinger", MARGIN = 2)
+inv_simp_microcol_18S <- diversity(stand_wide_microcol_18S_mat, index = "invsimpson", MARGIN = 2, equalize.groups = TRUE)
+
+plot_inv_simp_microcol_18S <- as.data.frame(inv_simp_microcol_18S) %>%
+  rownames_to_column(var = "MC")
+
+ggplot(plot_shannon_microcol_18S, aes(x= SAMPLE, y= shannon_microcol_18s)) +
+  geom_point(color = "purple", size = 4, shape = 17) +
+  labs(x = "", y= "Shannon diversity") +
+  theme(axis.text.x = element_text(angle = -45, hjust = 0))
+
+ggplot(plot_inv_simp_microcol_18S, aes(x= MC, y= inv_simp_microcol_18S)) +
+  geom_point(color = "#2d00f7", size = 4, shape = 17) +
+  labs(x= "", y= "Inverse Simpson diversity") +
+  theme(axis.text.x = element_text(angle = -45, hjust = 0))
+#
 
 #### Microbes that might have been recruited from the vent and settled on substrate ####
 ## Find FeatureIDs that are present in both locations
@@ -1058,6 +1236,10 @@ length(unique(onall_sub_16s$FeatureID))
 
 #### Results: Microbe diversity-comparing Vent & Sub vs. Sub only ####
 # 18S-stacked bar plot of community compostion (Relative ASVs)
+df_18s_svs <- mc_tmp_18 %>%
+  left_join(key_dist_18) %>%
+  filter(DISTRIBUTION == "Substrate only" | DISTRIBUTION == "Vent & Substrate only")
+
 svs_taxa_18S <- df_18s_svs %>%
   group_by(DISTRIBUTION, Phylum) %>%
   summarise(Count = n(), .groups = 'drop') %>%
@@ -1094,7 +1276,7 @@ shannon_svs_18S
 plot_shannon_svs_18S <- as.data.frame(shannon_svs_18S) %>%
   rownames_to_column(var = "DISTRIBUTION")
 plot_shannon_svs_18S
-ggplot(plot_shannon_svs_18S, aes(x= DISTRIBUTION, y= shannon_svs_16S)) +
+ggplot(plot_shannon_svs_18S, aes(x= DISTRIBUTION, y= shannon_svs_18S)) +
   geom_point(color = "purple", size = 4, shape = 18) +
   labs(x = "", y= "18S Shannon diversity")
 
@@ -1234,7 +1416,6 @@ class(clr_substrate_sample)
 # Transform data back to a df
 clr_df_sample <- data.frame(clr_substrate_sample)
 colnames(clr_df_sample)
-head(clr_df)
 
 covar_clr <- t(clr_df_sample) %*% as.matrix(clr_df_sample)
 det(covar_clr)
@@ -1404,6 +1585,7 @@ summary(clr_pca_tax)
 
 clr_pca_riftia <- prcomp(clr_df_riftia)
 class(clr_pca_riftia)
+
 summary(clr_pca_riftia)
 
 clr_pca_quartz <- prcomp(clr_df_quartz)
@@ -1588,6 +1770,4 @@ ggplot(df_16s_pca2_p, aes(x = PC1, y = PC2, fill = Microcolonizer, shape = Subst
   theme_classic() +
   ggtitle('CLR PCA Ordination for 16s') +
   guides(fill = guide_legend(override.aes = list(shape = 22)))
-
-
 #### ####
