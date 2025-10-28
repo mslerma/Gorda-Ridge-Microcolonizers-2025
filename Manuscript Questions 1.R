@@ -63,7 +63,7 @@ mc_df_18s <- df_18s_all %>%
   separate(SAMPLE, into = c("MC", "SUBSTRATE"), sep = "-", remove = FALSE) %>%
   add_column(PRESENCE = 1) 
 
-ggplot(mc_df_18s, aes(x = MC, y = FeatureID, fill = PRESENCE)) +
+ggplot(mc_df_18s, aes(x = SUBSTRATE, y = FeatureID, fill = PRESENCE)) +
   geom_tile(stat = "identity") + 
   theme_classic() +
   facet_grid(cols = vars(SUBSTRATE), rows = vars(Supergroup), scales = "free", space = "free") +
@@ -132,6 +132,7 @@ mc_df_16s <- df_16s_all %>%
   separate(SAMPLE, into = c("MC", "SUBSTRATE"), sep = "-", remove = FALSE) %>%
   add_column(PRESENCE = 1) 
 unique(mc_df_18s$Phylum)
+length(unique(shell_only_18s$FeatureID))
 
 ggplot(mc_df_16s, aes(x = MC, y = FeatureID, fill = PRESENCE)) +
   geom_tile(stat = "identity") + 
@@ -418,6 +419,40 @@ ggplot(filt_rel_seq_18S, aes(x = ordered_SAMPLES_18S, y = SUM_SEQ, fill = TAXA_L
   theme_minimal() + 
   theme(axis.text.x = element_text(angle = -45, hjust = 0)) + 
   labs(x = "", y = "Relative Seqeunce Abundance")
+
+#
+seq_summary <- df_18s_all %>%
+  unite(TAXA_LEVEL, Supergroup, Phylum, sep = "-", remove = FALSE) %>%
+  group_by(SAMPLE, TAXA_LEVEL) %>%
+  summarise(total_seq = sum(SEQ_AVG, na.rm = TRUE), .groups = "drop")
+
+# Step 2: Calculate relative abundance within each Site
+seq_relative <- seq_summary %>%
+  group_by(SAMPLE) %>%
+  mutate(rel_abundance = total_seq / sum(total_seq)) %>%
+  ungroup() %>%
+  separate(SAMPLE, into = c("MC", "SUBSTRATE"), sep = "-", fill = "right", remove = FALSE) %>%
+  mutate(TAXA_LEVEL = fct_reorder(TAXA_LEVEL, rel_abundance, .fun = sum))
+
+# Step 3: Plot relative abundance
+ggplot(seq_relative, aes(x = SAMPLE, y = rel_abundance, fill = TAXA_LEVEL)) +
+  geom_bar(stat = "identity", position = "stack") +
+  scale_y_continuous(labels = scales::percent_format()) +
+  labs(
+    title = "Relative Sequence Abundance of Protists by Phylum",
+    x = "Site",
+    y = "Relative Abundance (%)",
+    fill = "Phylum"
+  ) +
+  facet_wrap(~MC, scales = "free_x") +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    legend.position = "right"
+  )
+
+  
+
 #### ASV count of each phyla across substrates - point/dot plot ####
 ASV_onsubs <- stacked_asvs %>%
   separate(SAMPLE, into = c("MC", "SUBSTRATE"), sep = "-", remove = FALSE) %>%
@@ -1398,12 +1433,10 @@ ggplot(ASV_onsubs, aes(x = SUBSTRATE, y = Phylum)) +
 
 #### PCA Analysis ####
 ## 18S
-subset_substrate_df <- asv_wtax_18 %>%
-  filter(SAMPLETYPE == "Microcolonizer") #%>%
-
-matrix_substrate_wide <- subset_substrate_df %>%
-  select(SAMPLE, FeatureID, SEQUENCE_COUNT) %>%
-  pivot_wider(id_cols = FeatureID, names_from = SAMPLE, values_from = SEQUENCE_COUNT, values_fill = 0) %>%
+matrix_substrate_wide <- mc_18S_df %>%
+  filter(SAMPLE != "Background seawater" & SAMPLE != "Mt Edwards diffuse fluid") %>%
+  select(SAMPLE, FeatureID, SEQ_AVG) %>%
+  pivot_wider(id_cols = FeatureID, names_from = SAMPLE, values_from = SEQ_AVG, values_fill = 0) %>%
   column_to_rownames(var = "FeatureID") %>%
   as.matrix()
 covariance_substrate <- as.matrix(matrix_substrate_wide) %*% t(matrix_substrate_wide)
@@ -1437,9 +1470,9 @@ ggplot(clr_variances, aes(x = as.numeric(PCaxis), y = PercVar)) +
 # plot
 pca_df_toplot <- data.frame(clr_pca_sample$x) %>%
   rownames_to_column(var = "SAMPLE") %>%
-  separate(SAMPLE, c("number", "VentSite", "tmp", "Microcolonizer_id", "Substrate", "excess"), sep = "_") 
+  separate(SAMPLE, into = c("Microcolonizer", "Substrate"), sep = "-") 
 
-ggplot(pca_df_toplot, aes(x = PC1, y = PC2, fill = Microcolonizer_id, shape = Substrate)) +
+ggplot(pca_df_toplot, aes(x = PC1, y = PC2, fill = Microcolonizer, shape = Substrate)) +
   geom_point(color = "black", size = 3) +
   scale_shape_manual(values = c(21, 22, 24)) +
   theme_classic() +
@@ -1447,17 +1480,9 @@ ggplot(pca_df_toplot, aes(x = PC1, y = PC2, fill = Microcolonizer_id, shape = Su
   guides(fill = guide_legend(override.aes = list(shape = 22)))
 
 # PCA for each SUBSTRATE + VENT
-df_18s_prePCA <- asv_wtax_18 |> 
-  select(-SAMPLE) |> 
-  filter(SAMPLETYPE == "Microcolonizer" | VENT == "Mt Edwards" | VENT == "Deep seawater") |> 
-  filter(Domain == "Eukaryota") |> 
-  filter(!(Phylum == "NA")) %>%
-  mutate(SUBSTRATE = str_replace_all(Substrate, "z2", "z")) |> 
-  mutate(SAMPLE = case_when(
-    SAMPLETYPE == "Microcolonizer" ~ paste(MC, SUBSTRATE, sep = "-"),
-    VENT == "Deep seawater" ~ "Background seawater",
-    VENT == "Mt Edwards" ~ "Mt Edwards diffuse fluid"
-  )) |>
+df_18s_prePCA <- mc_18S_df %>% 
+  filter(!(Phylum == "NA" | Phylum == "Metazoa" | Phylum == "Streptophyta")) %>%
+  separate(SAMPLE, into = c("MC", "SUBSTRATE"), sep = "-", remove = FALSE) %>%
   # group_by(SAMPLE, FeatureID, Taxon, Domain, 
   #          Supergroup, Phylum, Class, Order, Family, Genus, Species, MC, SEQUENCE_COUNT) %>%
   mutate(TAXA_REVISED = case_when(
@@ -1467,23 +1492,6 @@ df_18s_prePCA <- asv_wtax_18 |>
   unite(TAX_LEVEL, Supergroup, Phylum, sep = "-", remove = FALSE) %>%  
   unite(TAX_MC_SUBSTRATE, TAXA_REVISED, MC, SUBSTRATE, sep = "_", remove = FALSE) 
 
-df_18s_pre_PCA <- asv_wtax_18 |> 
-  select(-SAMPLE) |> 
-  filter(SAMPLETYPE == "Microcolonizer" | VENT == "Mt Edwards" | VENT == "Deep seawater") |> 
-  filter(Domain == "Eukaryota") |> 
-  filter(!(Phylum == "NA")) %>%
-  mutate(SUBSTRATE = str_replace_all(Substrate, "z2", "z")) |> 
-  mutate(SAMPLE = case_when(
-    SAMPLETYPE == "Microcolonizer" ~ paste(MC, SUBSTRATE, sep = "-"),
-    VENT == "Deep seawater" ~ "Background seawater",
-    VENT == "Mt Edwards" ~ "Mt Edwards diffuse fluid"
-  )) |>
-  mutate(TAXA_REVISED = case_when(
-    Supergroup == "Alveolata" ~ paste(Supergroup, Phylum, sep = "-"),
-    TRUE ~ Supergroup
-  )) %>% 
-  unite(TAX_LEVEL, Supergroup, Phylum, sep = "-", remove = FALSE)
-
 unique(df_18s_prePCA$TAX_LEVEL)
 unique(df_18s_prePCA$SAMPLE)
 
@@ -1491,9 +1499,9 @@ unique(df_18s_prePCA$SAMPLE)
 matrix_shell_wide <- df_18s_prePCA %>%
   filter(SUBSTRATE == "Shell") %>% 
   ungroup() %>%
-  select(FeatureID, TAX_MC_SUBSTRATE, SEQUENCE_COUNT) %>%
-  mutate(SEQUENCE_COUNT = as.numeric(SEQUENCE_COUNT)) %>% 
-  pivot_wider(id_cols = FeatureID, names_from = TAX_MC_SUBSTRATE, values_from = SEQUENCE_COUNT, values_fill = 0, values_fn = mean) %>%
+  select(FeatureID, TAX_MC_SUBSTRATE, SEQ_AVG) %>%
+  mutate(SEQ_AVG = as.numeric(SEQ_AVG)) %>% 
+  pivot_wider(id_cols = FeatureID, names_from = TAX_MC_SUBSTRATE, values_from = SEQ_AVG, values_fill = 0, values_fn = mean) %>%
   column_to_rownames(var = "FeatureID") %>%
   as.matrix()
 
@@ -1501,18 +1509,18 @@ matrix_shell_wide <- df_18s_prePCA %>%
 matrix_riftia_wide <- df_18s_prePCA %>%
   filter(SUBSTRATE == "Riftia") %>% 
   ungroup() %>%
-  select(FeatureID, TAX_MC_SUBSTRATE, SEQUENCE_COUNT) %>%
-  mutate(SEQUENCE_COUNT = as.numeric(SEQUENCE_COUNT)) %>% 
-  pivot_wider(id_cols = FeatureID, names_from = TAX_MC_SUBSTRATE, values_from = SEQUENCE_COUNT, values_fill = 0, values_fn = mean) %>%
+  select(FeatureID, TAX_MC_SUBSTRATE, SEQ_AVG) %>%
+  mutate(SEQ_AVG = as.numeric(SEQ_AVG)) %>% 
+  pivot_wider(id_cols = FeatureID, names_from = TAX_MC_SUBSTRATE, values_from = SEQ_AVG, values_fill = 0, values_fn = mean) %>%
   column_to_rownames(var = "FeatureID") %>%
   as.matrix()
 
 matrix_quartz_wide <- df_18s_prePCA %>%
   filter(SUBSTRATE == "Quartz") %>% 
   ungroup() %>%
-  select(FeatureID, TAX_MC_SUBSTRATE, SEQUENCE_COUNT) %>%
-  mutate(SEQUENCE_COUNT = as.numeric(SEQUENCE_COUNT)) %>% 
-  pivot_wider(id_cols = FeatureID, names_from = TAX_MC_SUBSTRATE, values_from = SEQUENCE_COUNT, values_fill = 0, values_fn = mean) %>%
+  select(FeatureID, TAX_MC_SUBSTRATE, SEQ_AVG) %>%
+  mutate(SEQ_AVG = as.numeric(SEQ_AVG)) %>% 
+  pivot_wider(id_cols = FeatureID, names_from = TAX_MC_SUBSTRATE, values_from = SEQ_AVG, values_fill = 0, values_fn = mean) %>%
   column_to_rownames(var = "FeatureID") %>%
   as.matrix()
 
@@ -1520,9 +1528,9 @@ matrix_quartz_wide <- df_18s_prePCA %>%
 matrix_vent_wide <- df_18s_pre_PCA %>%
   filter(SAMPLE == "Mt Edwards diffuse fluid") %>% 
   ungroup() %>%
-  select(FeatureID, TAXA_REVISED, SEQUENCE_COUNT) %>%
-  mutate(SEQUENCE_COUNT = as.numeric(SEQUENCE_COUNT)) %>% 
-  pivot_wider(id_cols = FeatureID, names_from = TAXA_REVISED, values_from = SEQUENCE_COUNT, values_fill = 0, values_fn = mean) %>%
+  select(FeatureID, TAXA_REVISED, SEQ_AVG) %>%
+  mutate(SEQ_AVG = as.numeric(SEQ_AVG)) %>% 
+  pivot_wider(id_cols = FeatureID, names_from = TAXA_REVISED, values_from = SEQ_AVG, values_fill = 0, values_fn = mean) %>%
   column_to_rownames(var = "FeatureID") %>%
   as.matrix()
 
@@ -1658,37 +1666,45 @@ pca_vent_toplot <- data.frame(clr_pca_vent$x) %>%
 unique(pca_vent_toplot$Supergroup)
 view(pca_tax_toplot)
 
-ggplot(pca_tax_toplot, aes(x = PC1, y = PC2, fill = TAX, shape = MC)) +
+pca_shell_plot <- ggplot(pca_tax_toplot, aes(x = PC1, y = PC2, fill = TAX, shape = MC)) +
   geom_point(size = 3, color = "black") +
   scale_shape_manual(values = c(21, 22, 23, 24, 25)) +
   theme_classic() +
   ggtitle('CLR PCA Ordination for 18s on Shell') +
   guides(fill = guide_legend(override.aes = list(shape = 22))) +
-  theme(legend.position = "right")
+  theme(legend.position = "right", legend.title = element_text(size = 8), legend.text = element_text(size = 7)) +
+  guides(color = guide_legend(override.aes = list(size = 1)))
 
-ggplot(pca_riftia_toplot, aes(x = PC1, y = PC2, fill = TAX, shape = MC)) +
+pca_riftia_plot <- ggplot(pca_riftia_toplot, aes(x = PC1, y = PC2, fill = TAX, shape = MC)) +
   geom_point(size = 3, color = "black") +
   scale_shape_manual(values = c(21, 22, 23, 24, 25)) +
   theme_classic() +
   ggtitle('CLR PCA Ordination for 18s on Riftia') +
   guides(fill = guide_legend(override.aes = list(shape = 22))) +
-  theme(legend.position = "right")
+  theme(legend.position = "right", legend.title = element_text(size = 8), legend.text = element_text(size = 7)) +
+  guides(color = guide_legend(override.aes = list(size = 1)))
 
-ggplot(pca_quartz_toplot, aes(x = PC1, y = PC2, fill = TAX, shape = MC)) +
+pca_quartz_plot <- ggplot(pca_quartz_toplot, aes(x = PC1, y = PC2, fill = TAX, shape = MC)) +
   geom_point(size = 3, color = "black") +
   scale_shape_manual(values = c(21, 22, 23, 24, 25)) +
   theme_classic() +
   ggtitle('CLR PCA Ordination for 18s on Quartz') +
   guides(fill = guide_legend(override.aes = list(shape = 22))) +
-  theme(legend.position = "right")
+  theme(legend.position = "right", legend.title = element_text(size = 8), legend.text = element_text(size = 7)) +
+  guides(color = guide_legend(override.aes = list(size = 1)))
 
-ggplot(pca_vent_toplot, aes(x = PC1, y = PC2, fill = Supergroup, shape = Supergroup)) +
+pca_vent_plot <- ggplot(pca_vent_toplot, aes(x = PC1, y = PC2, fill = Supergroup, shape = Supergroup)) +
   geom_point(size = 3, color = "black", shape = 21) +
   theme_classic() +
-  scale_fill_manual(values = c("#ff595e", "#ff924c", "#ffca3a", "#c5ca30",  "#8ac926",  "#52a675",  "#1982c4",  "#4267ac",  "#6a4c93",  "#b5a6c9")) +
+  scale_fill_manual(values = c("#be9c00", "#8cab00", "#00be70", "#00c1ab", "#00bbda", "#00acfc", "#8b93ff", "#d575fe", "#f962dd", "#ff65ac")) +
   ggtitle('CLR PCA Ordination for 18s Vent fluid') +
   guides(fill = guide_legend(override.aes = list(shape = 22))) +
-  theme(legend.position = "right")
+  theme(legend.position = "right", legend.title = element_text(size = 8), legend.text = element_text(size = 7)) +
+  guides(color = guide_legend(override.aes = list(size = 1))) # Smaller legend symbols
+
+
+library(ggpubr)
+ggarrange(pca_quartz_plot, pca_riftia_plot, pca_shell_plot, pca_vent_plot, labels = c("a.", "b.", "c.", "d."),  ncol = 2, nrow = 2, legend = "right")
 
 ## 16S
 mc_tmp_16s <- asv16s_df |> 
