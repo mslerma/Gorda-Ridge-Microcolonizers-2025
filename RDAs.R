@@ -43,31 +43,35 @@ samp_env_data <- subs_for_rda %>%
   select(SAMPLE, Time, Temperature) %>%
   distinct()
 
+comm_hell <- decostand(comm_matrix, method = "hellinger")
+
 rda_MCs_18S <- rda(comm_hell ~ Time + Temperature, data = samp_env_data)
 summary(rda_MCs_18S)
-anova(rda_MCs_18S, by = "term")
+anova.cca(rda_MCs_18S, by = "term")
 RsquareAdj(rda_MCs_18S)
 all_MCs_TnT_rda <- plot(rda_MCs_18S, main = "All MCs")
   
 ##
 
-comm_hell <- decostand(comm_matrix, method = "hellinger")
-
 rda_all_18S <- rda(comm_hell ~ SUBSTRATE + Time + Temperature, data = env_data)
 summary(rda_all_18S)
-anova(rda_all_18S, by = "term")
+anova.cca(rda_all_18S, by = "term")
 RsquareAdj(rda_all_18S)
 all_MCs_STT_rda <- plot(rda_all_18S, main = "All MCs")
 
+RsquareAdj(rda(comm_hell ~ Time, data = env_data))
+RsquareAdj(rda(comm_hell ~ Temperature, data = env_data))
+RsquareAdj(rda(comm_hell ~ SUBSTRATE, data = env_data))
+
 rda_time_18S <- rda(comm_hell ~ Time, data = env_data)
 summary(rda_time_18S)
-anova(rda_time_18S, by = "term")
+anova.cca(rda_time_18S, by = "term")
 RsquareAdj(rda_time_18S)
 all_time_rda <- plot(rda_time_18S)
 
 rda_temp_18S <- rda(comm_hell ~ Temperature, data = env_data)
 summary(rda_temp_18S)
-anova(rda_temp_18S, by = "term")
+anova.cca(rda_temp_18S, by = "term")
 RsquareAdj(rda_temp_18S)
 all_temp_rda <- plot(rda_temp_18S)
 
@@ -78,7 +82,7 @@ comm_quartz <- comm_hell[rownames(env_quartz), ]
 rda_quartz_18S <- rda(comm_quartz ~ Time + Temperature, data = env_quartz)
 
 summary(rda_quartz_18S)
-anova(rda_quartz_18S, by = "term")
+anova.cca(rda_quartz_18S, by = "term")
 RsquareAdj(rda_quartz_18S)
 quartz_TnT_rda <- plot(rda_quartz_18S)
 
@@ -89,7 +93,7 @@ comm_riftia <- comm_hell[rownames(env_riftia), ]
 rda_riftia_18S <- rda(comm_riftia ~ Time + Temperature, data = env_riftia)
 
 summary(rda_riftia_18S)
-anova(rda_riftia_18S, by = "term")
+anova.cca(rda_riftia_18S, by = "term")
 RsquareAdj(rda_riftia_18S)
 riftia_TnT_rda <- plot(rda_riftia_18S)
 
@@ -100,7 +104,7 @@ comm_shell <- comm_hell[rownames(env_shell), ]
 rda_shell_18S <- rda(comm_shell ~ Time + Temperature, data = env_shell)
 
 summary(rda_shell_18S)
-anova(rda_shell_18S, by = "term")
+anova.cca(rda_shell_18S, by = "term")
 RsquareAdj(rda_shell_18S)
 shell_TnT_rda <- plot(rda_shell_18S)
 
@@ -115,11 +119,12 @@ summary(rda_MC23_time)
 plot(rda_MC23_time)
 rda_MC23_temp <- rda(comm_MC23 ~ Temperature, data = env_MC23)
 summary(rda_MC23_temp)
-anova(rda_MC23_temp, by = "term")
+anova.cca(rda_MC23_temp, by = "term")
+RsquareAdj(rda_MC23_temp)
 plot(rda_MC23_temp)
 rda_MC23_subs <- rda(comm_MC23 ~ SUBSTRATE, data = env_MC23)
 summary(rda_MC23_subs)
-anova(rda_MC23_subs, by = "term")
+anova.cca(rda_MC23_subs, by = "term")
 plot(rda_MC23_subs)
 
 rda_MC23_subs_temp <- rda(comm_MC23 ~ Temperature + SUBSTRATE, data = env_MC23)
@@ -134,7 +139,7 @@ matrix_rdasubs_wide <- subs_for_rda %>%
 covariance_rdasubs <- as.matrix(matrix_rdasubs_wide) %*% t(matrix_rdasubs_wide)
 det(covariance_rdasubs)
 stand_matrix_rdasubs <- decostand(matrix_rdasubs_wide, method = "hellinger", MARGIN = 2)
-
+clr
 ####
 rda_plots <- list()
 wrap_plots(rda_plots, ncol = 3)
