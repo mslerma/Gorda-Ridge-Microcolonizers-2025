@@ -58,6 +58,7 @@ riftia_only_SUB <- joined_ASVs_SUBS_only %>%
 shell_only_SUB <- joined_ASVs_SUBS_only %>%
   filter(subs_combo == "Shell")
 
+
 all_SUB <- joined_ASVs_SUBS_only %>%
   filter(subs_combo == "Quartz,Riftia,Shell")
 length(unique(joined_ASVs_SUBS_only$FeatureID))
@@ -115,9 +116,14 @@ length(unique(ASVs_quartz$FeatureID))
 ###ASVs
 # total
 total_ASVs_18S <- length(unique(df_18S_data$FeatureID))
-
+total_ASVs_18S <- length(unique(mc_df_18s$FeatureID))
+length(unique(df_18S_MC_data$FeatureID))
+length(mc_df_18s$FeatureID)
 # MC1
 total_ASVs_MC1 <- length(unique(MC1_18S_data$FeatureID))
+mc1_18s <- df_18S_MC_data %>%
+  filter(MC == "MC1")
+length(unique(mc1_18s$FeatureID))
 
 # MC2
 total_ASVs_MC2 <- length(unique(MC2_18S_data$FeatureID))
@@ -158,3 +164,36 @@ summary_table <- bind_rows(summary_SEQs, summary_ASVs)
 rows(summary_16s, summary_18s) %>%
   select(Domain, Total_sequences, Total_ASVs, Total_Unassigned)
 
+
+## relative sequence only on substrates
+SUBS_only_rel_seq <- joined_ASVs_SUBS_only %>%
+unite(TAXA_LEVEL, Supergroup, Phylum, sep = "-", remove = FALSE) %>%
+  group_by(subs_combo, TAXA_LEVEL) %>%
+  summarise(total_seq = sum(SEQ_AVG, na.rm = TRUE), .groups = "drop") %>%
+  ungroup() %>%
+  group_by(subs_combo) %>%
+  mutate(rel_abundance = total_seq / sum(total_seq)) %>%
+  ungroup() %>%
+  mutate(TAXA_LEVEL = fct_reorder(TAXA_LEVEL, rel_abundance, .fun = sum))
+unique(SUBS_only_rel_seq$TAXA_LEVEL)
+unique(SUBS_only_rel_seq_2$TAXA_LEVEL)
+SUBS_only_rel_seq_2 <- joined_ASVs_SUBS_only %>%
+  filter(SEQ_AVG > 99) %>%
+  unite(TAXA_LEVEL, Supergroup, Phylum, sep = "-", remove = FALSE) %>%
+  group_by(subs_combo, TAXA_LEVEL) %>%
+  summarise(total_seq = sum(SEQ_AVG, na.rm = TRUE), .groups = "drop") %>%
+  ungroup() %>%
+  group_by(subs_combo) %>%
+  mutate(rel_abundance = total_seq / sum(total_seq)) %>%
+  ungroup() %>%
+  mutate(TAXA_LEVEL = fct_reorder(TAXA_LEVEL, rel_abundance, .fun = sum))
+
+ggplot(SUBS_only_rel_seq_2, aes(x = subs_combo, y = rel_abundance, fill = TAXA_LEVEL)) +
+  geom_bar(stat = "identity", position = "fill", color = "black") +
+  scale_fill_manual(values = c("#d7b5d8", "#df65b0", "#dd1c77", "#fde0dd", "#fa9fb5", "#c51b8a", "#edf8fb", "#bfd3e6", "#9ebcda", "#8c96c6", "#8856a7", "#810f7c", "#c7e9b4", "#7fcdbb", "#2c7fb8", "#253494")) +
+  theme_minimal() + 
+  theme(axis.text.x = element_text(angle = -45, hjust = 0)) + 
+  labs(x = "", y = "Relative Seqeunce Abundance")
+#
+
+length(unique(df_18s_all_filt$FeatureID))
